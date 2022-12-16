@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import getPicturesPixabayApi from '../../services/pixabay-api';
@@ -13,50 +13,61 @@ import ImageGallery from '../ImageGallery/ImageGallery';
 class App extends Component {
   state = {
     query: '',
-    images: [],
-    page: 1,
-    error: null,
-    showModal: false,
-    tags: '',
-    largeImageURL: '',
-    loading: false,
   };
 
   handleFormSubmit = query => {
-    this.setState({ query, page: 1, images: [] });
+    this.setState({
+      query,
+      images: [],
+      page: 1,
+      error: null,
+      showModal: false,
+      tags: '',
+      largeImageURL: '',
+      loading: false,
+      showButton: false,
+    });
   };
 
-  fetchApi = () => {
-    const { query, page } = this.state;
-
-    getPicturesPixabayApi(query, page)
-      .then(({ data: { hits } }) => {
-        this.setState(prevState => ({
-          images: [...prevState.images, ...hits],
-          page: prevState.page + 1,
-        }));
-      })
-      .catch(error => this.setState({ error }))
-      .finally(() => this.setState({ loading: false }));
-  };
-
-  loadMore = () => {
-    this.fetchApi(this.state.page);
-  };
-
-  componentDidUpdate(prevProps, prevState) {
+  componentDidUpdate = (_, prevState) => {
     const prevQuery = prevState.query;
     const { query, page, images } = this.state;
 
-    if (prevQuery !== query) {
+    if (prevQuery !== query || prevState.page !== page) {
       this.setState({ loading: true });
-      this.fetchApi(query, page);
-    }
 
-    if (images.length > 12) {
-      this.pageScroll();
+      getPicturesPixabayApi(query, page, images)
+        .then(images => {
+          images.data.hits.length === 0 &&
+            toast.warn('There are no images for this search');
+
+          if (page < Math.ceil(images.data.totalHits / 12)) {
+            this.setState({ showButton: true });
+          } else this.setState({ showButton: false });
+
+          if (prevQuery !== query) {
+            this.setState({ images: [...images.data.hits] });
+          } else
+            this.setState({
+              images: [...prevState.images, ...images.data.hits],
+            });
+
+          if (images.length > 12) {
+            this.pageScroll();
+          }
+        })
+        .catch(error => {
+          this.setState({
+            error: toast.error('Enter a normal query!'),
+          });
+        })
+        .finally(() => this.setState({ loading: false }));
     }
-  }
+  };
+
+  loadMore = () => {
+    this.setState(prevState => ({ page: prevState.page + 1 }));
+  };
 
   pageScroll = () => {
     window.scrollTo({
@@ -77,8 +88,16 @@ class App extends Component {
   };
 
   render() {
-    const { showModal, tags, largeImageURL, query, page, images, loading } =
-      this.state;
+    const {
+      showModal,
+      tags,
+      largeImageURL,
+      query,
+      page,
+      images,
+      loading,
+      showButton,
+    } = this.state;
 
     return (
       <div>
@@ -96,8 +115,7 @@ class App extends Component {
           />
         )}
 
-
-        {images.length >= 12 && <Button loadMore={this.loadMore} />}
+        {showButton && <Button loadMore={this.loadMore} />}
 
         {showModal && (
           <Modal
